@@ -120,7 +120,7 @@ class ProjectAgent:
         }, path)
 
     def load(self):
-        checkpoint = torch.load("agent_checkpoint.pth")
+        checkpoint = torch.load('Saved_models/agent_checkpoint_dueling.pth')
         self.qnetwork_local.load_state_dict(checkpoint['q_network'])
         self.qnetwork_target.load_state_dict(checkpoint['target_network'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
