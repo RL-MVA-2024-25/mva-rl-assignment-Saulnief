@@ -13,7 +13,9 @@ import tqdm
 
 env = TimeLimit(
     env=HIVPatient(domain_randomization=False), max_episode_steps=200
-)  # The time wrapper limits the number of steps in an episode at 200.
+)
+
+# The time wrapper limits the number of steps in an episode at 200.
 # Now is the floor is yours to implement the agent and train it.
 
 
@@ -49,6 +51,23 @@ class QNetwork_dueling(nn.Module):
         
         # Advantage stream
         self.fc3_advantage = nn.Linear(128, action_size)
+        
+        self._init_weights()
+        
+        
+    """ def _initialize_weights(self, model):
+        for m in model.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias) """
+        
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -207,6 +226,16 @@ class QNetwork_better_dueling(nn.Module):
         # Advantage stream
         self.fc_advantage = nn.Linear(256, action_size)
         
+        # Initialize the weights
+        self._init_weights()
+        
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+        
     def forward(self, x):
         x = self.fc(x)
         
@@ -251,7 +280,7 @@ class ReplayBuffer:
 
 class ProjectAgent:
     config = {  'gamma': 0.99,
-            'batch_size': 64,
+            'batch_size': 512,
             'buffer_size': 10000,
             'epsilon_start': 1.0,
             'epsilon_end': 0.01,
@@ -361,7 +390,7 @@ class ProjectAgent:
         }, path)
 
     def load(self):
-        checkpoint = torch.load('src/Saved_models/agent_checkpoint_dueling.pth')
+        checkpoint = torch.load('src/Saved_models/agent_checkpoint_dueling_fastenv.pth')
         self.qnetwork_local.load_state_dict(checkpoint['q_network'])
         self.qnetwork_target.load_state_dict(checkpoint['target_network'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
@@ -778,4 +807,88 @@ for episode in tqdm.tqdm(range(n_episodes)):
         
 
 # Save the agent
-agent.save("agent_checkpoint_dueling_normalization.pth") """
+agent.save("agent_checkpoint_dueling_normalization.pth") 
+
+for agent_checkpoint_dueling_fastenv.pth
+
+config = {  'gamma': 0.99,
+            'batch_size': 512,
+            'buffer_size': 10000,
+            'epsilon_start': 1.0,
+            'epsilon_end': 0.01,
+            'epsilon_decay': 0.995,
+            'qnetwork_local': QNetwork_dueling(state_size, action_size),
+            'criterion': nn.SmoothL1Loss(),
+            'set_scheduler': False,
+            'learning_rate': 0.001,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',
+            'update_target_freq': 200,
+            'tau': 5e-4
+        }
+        
+        
+for agent_checkpoint_dueling_fastenv1.pth
+
+config = {  'gamma': 0.99,
+            'batch_size': 512,
+            'buffer_size': 10000,
+            'epsilon_start': 1.0,
+            'epsilon_end': 0.01,
+            'epsilon_decay': 0.995,
+            'qnetwork_local': QNetwork_better_dueling(state_size, action_size),
+            'criterion': nn.SmoothL1Loss(),
+            'set_scheduler': False,
+            'learning_rate': 0.001,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',
+            'update_target_freq': 200,
+            'tau': 5e-4
+        }
+"""
+
+""" 
+agent = ProjectAgent()
+
+# Training loop
+n_episodes = 1000
+scores = []
+scores_window = deque(maxlen=100)
+
+for episode in tqdm.tqdm(range(n_episodes)):
+    state, _ = env.reset()
+    score = 0
+    max_steps = 200
+    step = 0
+    
+    while True:
+        action = agent.act(state)
+        next_state, reward, done, trunc, _ = env.step(action)
+        norm_state = np.sign(state) * np.log(1 + np.abs(state))    # Normalize the state
+        norm_next_state = np.sign(next_state) * np.log(1 + np.abs(next_state))    # Normalize the next state
+        norm_reward = np.sign(reward) * np.log(1 + np.abs(reward))    # Normalize the reward    
+        agent.memory.add((norm_state, action, norm_reward, norm_next_state, done))
+        agent.learn()
+        state = next_state
+        score += reward
+        step += 1
+        
+        if done or step >= max_steps:
+            done = True
+            break
+            
+    scores.append(score)
+    scores_window.append(score)
+    
+    if episode % 100 == 0:
+        print(f'Episode {episode}, Average Score: {np.mean(scores_window)}')
+        
+        
+plt.plot(scores)
+plt.xlabel('Episode')
+plt.ylabel('Score')
+plt.show()
+        
+
+# Save the agent
+agent.save("agent_checkpoint_dueling_fastenv1.pth") """
