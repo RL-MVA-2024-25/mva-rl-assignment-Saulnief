@@ -724,6 +724,23 @@ plt.show()
 agent.save("agent_checkpoint_dueling_normalization.pth") """
 
 
+""" 
+config = {  'gamma': 0.99,
+            'batch_size': 1000,
+            'buffer_size': 10000,
+            'epsilon_start': 1.0,
+            'epsilon_end': 0.01,
+            'epsilon_decay': 0.995,
+            'qnetwork_local': QNetwork_better_dueling(state_size, action_size),
+            'criterion': nn.SmoothL1Loss(),
+            'set_scheduler': False,
+            'learning_rate': 0.001,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',
+            'update_target_freq': 200,
+            'tau': 5e-4
+        }
+
 agent = ProjectAgent()
 
 # Training loop
@@ -761,4 +778,4 @@ for episode in tqdm.tqdm(range(n_episodes)):
         
 
 # Save the agent
-agent.save("agent_checkpoint_dueling_normalization.pth")
+agent.save("agent_checkpoint_dueling_normalization.pth") """
