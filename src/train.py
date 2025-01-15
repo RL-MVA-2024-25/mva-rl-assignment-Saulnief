@@ -251,12 +251,12 @@ class ReplayBuffer:
 
 class ProjectAgent:
     config = {  'gamma': 0.99,
-            'batch_size': 1000,
+            'batch_size': 64,
             'buffer_size': 10000,
             'epsilon_start': 1.0,
             'epsilon_end': 0.01,
             'epsilon_decay': 0.995,
-            'qnetwork_local': QNetwork_better_dueling(state_size, action_size),
+            'qnetwork_local': QNetwork_dueling(state_size, action_size),
             'criterion': nn.SmoothL1Loss(),
             'set_scheduler': False,
             'learning_rate': 0.001,
