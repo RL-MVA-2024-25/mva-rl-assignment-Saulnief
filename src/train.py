@@ -8,7 +8,6 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 import random
 from collections import deque
-import matplotlib.pyplot as plt
 from copy import deepcopy
 import tqdm
 
@@ -252,19 +251,19 @@ class ReplayBuffer:
 
 class ProjectAgent:
     config = {  'gamma': 0.99,
-            'batch_size': 64,
+            'batch_size': 1000,
             'buffer_size': 10000,
             'epsilon_start': 1.0,
             'epsilon_end': 0.01,
             'epsilon_decay': 0.995,
-            'qnetwork_local': QNetwork_dueling(state_size, action_size),
+            'qnetwork_local': QNetwork_better_dueling(state_size, action_size),
             'criterion': nn.SmoothL1Loss(),
             'set_scheduler': False,
             'learning_rate': 0.001,
             'gradient_steps': 1,
             'update_target_strategy': 'replace',
-            'update_target_freq': 20,
-            'tau': 1e-3
+            'update_target_freq': 200,
+            'tau': 5e-4
         }
     
     def __init__(self):
@@ -662,7 +661,24 @@ for episode in tqdm.tqdm(range(n_episodes)):
 # Save the agent
 agent.save("agent_checkpoint_better.pth")
  """
-
+""" 
+config = {  'gamma': 0.99,
+            'batch_size': 64,
+            'buffer_size': 10000,
+            'epsilon_start': 1.0,
+            'epsilon_end': 0.01,
+            'epsilon_decay': 0.995,
+            'qnetwork_local': QNetwork_dueling(state_size, action_size),
+            'criterion': nn.SmoothL1Loss(),
+            'set_scheduler': False,
+            'learning_rate': 0.001,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',
+            'update_target_freq': 20,
+            'tau': 1e-3
+        }
+        
+        
 agent = ProjectAgent()
 
 # Training loop
@@ -703,6 +719,46 @@ plt.plot(scores)
 plt.xlabel('Episode')
 plt.ylabel('Score')
 plt.show()
+
+# Save the agent
+agent.save("agent_checkpoint_dueling_normalization.pth") """
+
+
+agent = ProjectAgent()
+
+# Training loop
+n_episodes = 1000
+scores = []
+scores_window = deque(maxlen=100)
+
+for episode in tqdm.tqdm(range(n_episodes)):
+    state, _ = env.reset()
+    score = 0
+    cpt_buffer = 0
+    max_steps = 200
+    step = 0
+    
+    while True:
+        action = agent.act(state)
+        next_state, reward, done, trunc, _ = env.step(action)
+        norm_state = np.sign(state) * np.log(1 + np.abs(state))    # Normalize the state
+        norm_next_state = np.sign(next_state) * np.log(1 + np.abs(next_state))    # Normalize the next state    
+        agent.memory.add((norm_state, action, reward, norm_next_state, done))
+        agent.learn()
+        state = next_state
+        score += reward
+        step += 1
+        
+        if done or step >= max_steps:
+            done = True
+            break
+            
+    scores.append(score)
+    scores_window.append(score)
+    
+    if episode % 100 == 0:
+        print(f'Episode {episode}, Average Score: {np.mean(scores_window)}')
+        
 
 # Save the agent
 agent.save("agent_checkpoint_dueling_normalization.pth")
