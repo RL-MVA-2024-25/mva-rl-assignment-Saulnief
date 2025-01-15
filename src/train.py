@@ -24,109 +24,7 @@ action_size = env.action_space.n
 # You have to implement your own agent.
 # Don't modify the methods names and signatures, but you can add methods.
 # ENJOY!
-class ProjectAgent:
-    def __init__(self, config):
-        self.state_dim = state_size
-        self.nb_actions = action_size
-        self.gamma = config['gamma'] if 'gamma' in config.keys() else 0.95
-        
-        # Initialize the replay buffer
-        self.batch_size = config['batch_size'] if 'batch_size' in config.keys() else 100
-        self.buffer_size = config['buffer_size'] if 'buffer_size' in config.keys() else int(1e5)
-        self.memory = ReplayBuffer(self.buffer_size, self.batch_size)
-        
-        # Initialize the epsilon-greedy parameters
-        self.epsilon_start = config['epsilon_start'] if 'epsilon_start' in config.keys() else 1.0
-        self.epsilon_end = config['epsilon_end'] if 'epsilon_end' in config.keys() else 0.01
-        self.epsilon_decay = config['epsilon_decay'] if 'epsilon_decay' in config.keys() else 0.995
-        self.epsilon = self.epsilon_start
-        
-        # Initialize the Q-networks
-        self.qnetwork_local = config['qnetwork_local'] if 'qnetwork_local' in config.keys() else QNetwork_baseline(state_size, action_size)
-        self.qnetwork_target = deepcopy(self.qnetwork_local)
-        self.criterion = config['criterion'] if 'criterion' in config.keys() else torch.nn.MSELoss()
-        
-        # Initialize the optimizer
-        lr = config['learning_rate'] if 'learning_rate' in config.keys() else 0.001
-        self.optimizer = config['optimizer'] if 'optimizer' in config.keys() else torch.optim.Adam(self.qnetwork_local.parameters(), lr=lr)
-        self.set_scheduler = config['set_scheduler'] if 'set_scheduler' in config.keys() else False
-        self.scheduler = StepLR(self.optimizer, step_size=100, gamma=0.9)
-        self.nb_gradient_steps = config['gradient_steps'] if 'gradient_steps' in config.keys() else 1
-        
-        # Initialize the target network update strategy
-        self.update_target_strategy = config['update_target_strategy'] if 'update_target_strategy' in config.keys() else 'replace'
-        self.update_target_freq = config['update_target_freq'] if 'update_target_freq' in config.keys() else 20
-        self.tau = config['tau'] if 'tau' in config.keys() else 1e-3
-        self.step = 0
-        
-    def act(self, observation, use_random=False):
-        if use_random or random.random() < self.epsilon:
-            return random.randint(0, self.nb_actions - 1)
-        else:
-            with torch.no_grad():
-                
-            # Check if observation is an array with a dictionary, and extract only the array part
-                if isinstance(observation, tuple) and len(observation) == 2 and isinstance(observation[0], np.ndarray):
-                    observation = observation[0]  # Extract the numpy array
-                    
-                norm_observation = np.sign(observation) * np.log(1 + np.abs(observation))    # Normalize the observation
-                state = torch.tensor(norm_observation, dtype=torch.float32).unsqueeze(0)
-                q_values = self.qnetwork_local(state)
-                return int(torch.argmax(q_values).item())
-            
-    def learn(self):
-        if len(self.memory) < self.batch_size:
-            return
-        
-        # Sample a batch from memory
-        (states, actions, rewards, next_states, dones) = self.memory.sample()
-        
-        # Compute the local Q-values
-        actions = actions.unsqueeze(1)
-        q_values = self.qnetwork_local(states).gather(1, actions).squeeze(1)
-        
-        # Compute the target Q-values
-        with torch.no_grad():
-            next_q_values = self.qnetwork_local(next_states)
-            max_actions = torch.argmax(next_q_values, dim=1).unsqueeze(1)
-            next_target_q_values = self.qnetwork_target(next_states).gather(1, max_actions).squeeze(1)
-            target_q_values = rewards + self.gamma * next_target_q_values * (1 - dones)
-            
-        # Loss and optimization
-        loss = self.criterion(q_values, target_q_values)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-        if self.set_scheduler:
-            self.scheduler.step()
-        
-        # Update the target network
-        self.step += 1
-        if self.update_target_strategy == 'replace' and self.step % self.update_target_freq == 0:
-            self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
-        elif self.update_target_strategy == 'soft' and self.step % self.update_target_freq == 0:
-            for target_param, local_param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
-                target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
-                
-        # Update epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon_decay * self.epsilon)
 
-    def save(self, path="agent_checkpoint.pth"):
-        torch.save({
-            'q_network': self.qnetwork_local.state_dict(),
-            'target_network': self.qnetwork_target.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'epsilon': self.epsilon
-        }, path)
-
-    def load(self):
-        checkpoint = torch.load('Saved_models/agent_checkpoint_dueling.pth')
-        self.qnetwork_local.load_state_dict(checkpoint['q_network'])
-        self.qnetwork_target.load_state_dict(checkpoint['target_network'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.epsilon = checkpoint['epsilon']
-        
-        
 # Baseline Q-network
 class QNetwork_baseline(nn.Module):
     def __init__(self, state_size, action_size):
@@ -349,7 +247,127 @@ class ReplayBuffer:
         return (states, actions, rewards, next_states, dones)
 
     def __len__(self):
-        return len(self.memory)    
+        return len(self.memory)
+
+
+class ProjectAgent:
+    config = {  'gamma': 0.99,
+            'batch_size': 64,
+            'buffer_size': 10000,
+            'epsilon_start': 1.0,
+            'epsilon_end': 0.01,
+            'epsilon_decay': 0.995,
+            'qnetwork_local': QNetwork_dueling(state_size, action_size),
+            'criterion': nn.SmoothL1Loss(),
+            'set_scheduler': False,
+            'learning_rate': 0.001,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',
+            'update_target_freq': 20,
+            'tau': 1e-3
+        }
+    
+    def __init__(self):
+        self.state_dim = state_size
+        self.nb_actions = action_size
+        self.gamma = self.config['gamma'] if 'gamma' in self.config.keys() else 0.95
+        
+        # Initialize the replay buffer
+        self.batch_size = self.config['batch_size'] if 'batch_size' in self.config.keys() else 100
+        self.buffer_size = self.config['buffer_size'] if 'buffer_size' in self.config.keys() else int(1e5)
+        self.memory = ReplayBuffer(self.buffer_size, self.batch_size)
+        
+        # Initialize the epsilon-greedy parameters
+        self.epsilon_start = self.config['epsilon_start'] if 'epsilon_start' in self.config.keys() else 1.0
+        self.epsilon_end = self.config['epsilon_end'] if 'epsilon_end' in self.config.keys() else 0.01
+        self.epsilon_decay = self.config['epsilon_decay'] if 'epsilon_decay' in self.config.keys() else 0.995
+        self.epsilon = self.epsilon_start
+        
+        # Initialize the Q-networks
+        self.qnetwork_local = self.config['qnetwork_local'] if 'qnetwork_local' in self.config.keys() else QNetwork_baseline(state_size, action_size)
+        self.qnetwork_target = deepcopy(self.qnetwork_local)
+        self.criterion = self.config['criterion'] if 'criterion' in self.config.keys() else torch.nn.MSELoss()
+        
+        # Initialize the optimizer
+        lr = self.config['learning_rate'] if 'learning_rate' in self.config.keys() else 0.001
+        self.optimizer = self.config['optimizer'] if 'optimizer' in self.config.keys() else torch.optim.Adam(self.qnetwork_local.parameters(), lr=lr)
+        self.set_scheduler = self.config['set_scheduler'] if 'set_scheduler' in self.config.keys() else False
+        self.scheduler = StepLR(self.optimizer, step_size=100, gamma=0.9)
+        self.nb_gradient_steps = self.config['gradient_steps'] if 'gradient_steps' in self.config.keys() else 1
+        
+        # Initialize the target network update strategy
+        self.update_target_strategy = self.config['update_target_strategy'] if 'update_target_strategy' in self.config.keys() else 'replace'
+        self.update_target_freq = self.config['update_target_freq'] if 'update_target_freq' in self.config.keys() else 20
+        self.tau = self.config['tau'] if 'tau' in self.config.keys() else 1e-3
+        self.step = 0
+        
+    def act(self, observation, use_random=False):
+        if use_random or random.random() < self.epsilon:
+            return random.randint(0, self.nb_actions - 1)
+        else:
+            with torch.no_grad():
+                
+            # Check if observation is an array with a dictionary, and extract only the array part
+                if isinstance(observation, tuple) and len(observation) == 2 and isinstance(observation[0], np.ndarray):
+                    observation = observation[0]  # Extract the numpy array
+                    
+                norm_observation = np.sign(observation) * np.log(1 + np.abs(observation))    # Normalize the observation
+                state = torch.tensor(norm_observation, dtype=torch.float32).unsqueeze(0)
+                q_values = self.qnetwork_local(state)
+                return int(torch.argmax(q_values).item())
+            
+    def learn(self):
+        if len(self.memory) < self.batch_size:
+            return
+        
+        # Sample a batch from memory
+        (states, actions, rewards, next_states, dones) = self.memory.sample()
+        
+        # Compute the local Q-values
+        actions = actions.unsqueeze(1)
+        q_values = self.qnetwork_local(states).gather(1, actions).squeeze(1)
+        
+        # Compute the target Q-values
+        with torch.no_grad():
+            next_q_values = self.qnetwork_local(next_states)
+            max_actions = torch.argmax(next_q_values, dim=1).unsqueeze(1)
+            next_target_q_values = self.qnetwork_target(next_states).gather(1, max_actions).squeeze(1)
+            target_q_values = rewards + self.gamma * next_target_q_values * (1 - dones)
+            
+        # Loss and optimization
+        loss = self.criterion(q_values, target_q_values)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        if self.set_scheduler:
+            self.scheduler.step()
+        
+        # Update the target network
+        self.step += 1
+        if self.update_target_strategy == 'replace' and self.step % self.update_target_freq == 0:
+            self.qnetwork_target.load_state_dict(self.qnetwork_local.state_dict())
+        elif self.update_target_strategy == 'soft' and self.step % self.update_target_freq == 0:
+            for target_param, local_param in zip(self.qnetwork_target.parameters(), self.qnetwork_local.parameters()):
+                target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+                
+        # Update epsilon
+        self.epsilon = max(self.epsilon_end, self.epsilon_decay * self.epsilon)
+
+    def save(self, path="agent_checkpoint.pth"):
+        torch.save({
+            'q_network': self.qnetwork_local.state_dict(),
+            'target_network': self.qnetwork_target.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'epsilon': self.epsilon
+        }, path)
+
+    def load(self):
+        checkpoint = torch.load('src/Saved_models/agent_checkpoint_dueling.pth')
+        self.qnetwork_local.load_state_dict(checkpoint['q_network'])
+        self.qnetwork_target.load_state_dict(checkpoint['target_network'])
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.epsilon = checkpoint['epsilon']
+            
     
 # Training Pipeline
     
@@ -371,7 +389,7 @@ class ReplayBuffer:
             'tau': 1e-3
         }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
@@ -430,7 +448,7 @@ config = {  'gamma': 0.99,
             'tau': 1e-3
         }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
@@ -487,7 +505,7 @@ config = {  'gamma': 0.99,
             'tau': 5e-4
         }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
@@ -545,7 +563,7 @@ config = {  'gamma': 0.99,
             'tau': 1e-3
         }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
@@ -603,7 +621,7 @@ config = {  'gamma': 0.99,
             'tau': 1e-3
         }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
@@ -644,25 +662,8 @@ for episode in tqdm.tqdm(range(n_episodes)):
 # Save the agent
 agent.save("agent_checkpoint_better.pth")
  """
- 
- 
-config = {  'gamma': 0.99,
-            'batch_size': 64,
-            'buffer_size': 10000,
-            'epsilon_start': 1.0,
-            'epsilon_end': 0.01,
-            'epsilon_decay': 0.995,
-            'qnetwork_local': QNetwork_better_dueling(state_size, action_size),
-            'criterion': nn.SmoothL1Loss(),
-            'set_scheduler': False,
-            'learning_rate': 0.001,
-            'gradient_steps': 1,
-            'update_target_strategy': 'replace',
-            'update_target_freq': 20,
-            'tau': 1e-3
-        }
 
-agent = ProjectAgent(config)
+agent = ProjectAgent()
 
 # Training loop
 n_episodes = 1000
